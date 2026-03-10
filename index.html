@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eye and Clouds Demo</title>
+<style>
+  body { margin:0; overflow:hidden; background:#87CEEB; }
+  canvas { display:block; }
+  #refreshBtn{
+    position:fixed;
+    top:10px;
+    right:10px;
+    padding:8px 12px;
+    font-size:14px;
+    z-index:10;
+  }
+</style>
+</head>
+<body>
+<button id="refreshBtn">Refresh Scene</button>
+<canvas id="c"></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+function resize(){
+  canvas.width=innerWidth;
+  canvas.height=innerHeight;
+}
+window.addEventListener('resize',resize);
+resize();
+
+let clouds=[];
+let maxClouds=30;
+let mouse={x:0,y:0,down:false};
+let eyeClicks=0;
+let eyeState="normal";
+let shaking=false;
+
+class Cloud{
+  constructor(x,y,r){
+    this.x=x;
+    this.y=y;
+    this.r=r;
+    this.vx=(Math.random()-0.5)*2;
+    this.vy=(Math.random()-0.5)*2;
+    this.alpha=0;
+    this.fadeIn=true;
+  }
+
+  update(){
+    if(this.fadeIn && this.alpha<1) this.alpha+=0.02;
+
+    this.x+=this.vx;
+    this.y+=this.vy;
+
+    this.vx*=0.98;
+    this.vy*=0.98;
+
+    if(this.x<this.r||this.x>canvas.width-this.r) this.vx*=-1;
+    if(this.y<this.r||this.y>canvas.height-this.r) this.vy*=-1;
+  }
+
+  draw(){
+    ctx.globalAlpha=this.alpha;
+    ctx.fillStyle="white";
+
+    for(let i=0;i<5;i++){
+      let ox=(Math.random()-0.5)*this.r;
+      let oy=(Math.random()-0.5)*this.r;
+      ctx.beginPath();
+      ctx.arc(this.x+ox,this.y+oy,this.r*0.6,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha=1;
+  }
+}
+
+class Eye{
+  constructor(){
+    this.x=canvas.width/2;
+    this.y=canvas.height/2;
+    this.vx=0;
+    this.vy=0;
+    this.radius=40;
+  }
+
+  update(){
+    this.x+=this.vx;
+    this.y+=this.vy;
+
+    this.vx*=0.95;
+    this.vy*=0.95;
+
+    let cx=canvas.width/2;
+    let cy=canvas.height/2;
+
+    this.x+=(cx-this.x)*0.01;
+    this.y+=(cy-this.y)*0.01;
+  }
+
+  draw(){
+    ctx.lineWidth=4;
+    ctx.strokeStyle="black";
+    ctx.fillStyle="white";
+
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle="yellow";
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,15,0,Math.PI*2);
+    ctx.fill();
+
+    if(eyeState==="changed"){
+      ctx.strokeStyle="red";
+      ctx.lineWidth=6;
+      ctx.beginPath();
+      ctx.arc(this.x,this.y,this.radius+6,0,Math.PI*2);
+      ctx.stroke();
+    }
+  }
+}
+
+let eye=new Eye();
+
+function spawnCloud(){
+  if(clouds.length>=maxClouds) return;
+
+  let x=Math.random()*canvas.width;
+  let y=Math.random()*canvas.height;
+
+  clouds.push(new Cloud(x,y,40+Math.random()*20));
+}
+
+canvas.addEventListener('mousemove',e=>{
+
+  mouse.x=e.clientX;
+  mouse.y=e.clientY;
+
+  if(mouse.down){
+
+    clouds=clouds.filter(c=>{
+
+      let d=Math.hypot(c.x-mouse.x,c.y-mouse.y);
+
+      if(d<50) return false;
+
+      if(d<120){
+        c.vx+=(c.x-mouse.x)*0.01;
+        c.vy+=(c.y-mouse.y)*0.01;
+      }
+
+      return true;
+    });
+
+    let dEye=Math.hypot(eye.x-mouse.x,eye.y-mouse.y);
+
+    if(dEye<120){
+      eye.vx+=(eye.x-mouse.x)*0.01;
+      eye.vy+=(eye.y-mouse.y)*0.01;
+    }
+  }
+
+});
+
+canvas.addEventListener('mousedown',()=>mouse.down=true);
+canvas.addEventListener('mouseup',()=>mouse.down=false);
+
+canvas.addEventListener('click',e=>{
+
+  let d=Math.hypot(e.clientX-eye.x,e.clientY-eye.y);
+
+  if(d<eye.radius){
+
+    eyeClicks++;
+
+    if(eyeClicks>=10){
+
+      eyeState="changed";
+
+      setTimeout(()=>{
+
+        shaking=true;
+
+        setTimeout(()=>{
+
+          eye=null;
+
+          clouds.forEach(c=>c.fadeIn=false);
+
+        },400);
+
+      },1000);
+
+    }
+
+  }
+
+});
+
+function draw(){
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(shaking){
+    ctx.save();
+    ctx.translate((Math.random()-0.5)*10,(Math.random()-0.5)*10);
+  }
+
+  clouds.forEach(c=>{
+    c.update();
+    c.draw();
+  });
+
+  if(eye){
+    eye.update();
+    eye.draw();
+  }
+
+  if(shaking) ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+setInterval(spawnCloud,800);
+
+draw();
+
+const btn=document.getElementById("refreshBtn");
+
+btn.onclick=()=>{
+
+  clouds=[];
+  eye=new Eye();
+
+  eyeClicks=0;
+  eyeState="normal";
+  shaking=false;
+
+  setTimeout(()=>{
+
+    for(let i=0;i<5;i++) spawnCloud();
+
+  },1000);
+
+};
+</script>
+</body>
+</html>
